@@ -427,7 +427,7 @@ function debounce(fn, delay) {
   };
 }
 
-const debouncedRender = debounce(render, 100);
+const debouncedRender = debounce(render, 75);
 
 // Generate positions based on selected algorithm
 function generatePositions() {
@@ -690,6 +690,10 @@ function render() {
   // Render using radial gradients at positions
   const baseRadius = Math.min(w, h) * 0.5;
   const noiseGen = new NoiseGenerator(seed);
+  const warpAmount = (warp / 100) * Math.min(w, h) * 0.3;
+  const warpIsActive = warp > 0 && warpShape !== 'flat';
+  const warpMaxFactor = warpShape === 'oval' ? 1.5 : 1;
+  const warpMargin = warpIsActive ? warpAmount * warpMaxFactor : 0;
 
   // Create pixel array
   const pixels = new Uint8ClampedArray(w * h * 4);
@@ -705,8 +709,8 @@ function render() {
 
   // Pre-calculate warp for all pixels (once per pixel instead of once per color per pixel)
   const warpedCoords = new Float32Array(w * h * 2); // x, y pairs
-  if (warp > 0 && warpShape !== 'flat') {
-    const amount = (warp / 100) * Math.min(w, h) * 0.3;
+  if (warpIsActive) {
+    const amount = warpAmount;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         let dx = 0, dy = 0;
@@ -790,10 +794,11 @@ function render() {
     const radius = baseRadius * pos.scale;
 
     // Bounding box optimization
-    const minX = Math.max(0, Math.floor(cx - radius));
-    const maxX = Math.min(w - 1, Math.ceil(cx + radius));
-    const minY = Math.max(0, Math.floor(cy - radius));
-    const maxY = Math.min(h - 1, Math.ceil(cy + radius));
+    // Expand bounds to cover warp displacement and avoid clipping artifacts.
+    const minX = Math.max(0, Math.floor(cx - radius - warpMargin));
+    const maxX = Math.min(w - 1, Math.ceil(cx + radius + warpMargin));
+    const minY = Math.max(0, Math.floor(cy - radius - warpMargin));
+    const maxY = Math.min(h - 1, Math.ceil(cy + radius + warpMargin));
 
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -851,7 +856,6 @@ function render() {
   updateURL();
 
   const endTime = performance.now();
-  console.log(`Render time: ${(endTime - startTime).toFixed(2)}ms (${w}x${h})`);
 }
 
 function renderDebugMarkers() {
@@ -1604,7 +1608,7 @@ gradientContainer.addEventListener('wheel', (e) => {
 // Resize handler
 window.addEventListener('resize', debounce(() => {
   render();
-}, 200));
+}, 75));
 
 // Handle browser back/forward navigation
 window.addEventListener('hashchange', () => {
