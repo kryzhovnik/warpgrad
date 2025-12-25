@@ -1,4 +1,4 @@
-import { hexToRgb, bilinearInterpolate, lerpColor } from './color.js';
+import { hexToRgb, bilinearInterpolate, rgbToOklab, oklabToRgb } from './color.js';
 import { NoiseGenerator } from './noise.js';
 
 // Available position types for color centers
@@ -38,6 +38,7 @@ export class MeshGradient {
     this.width = width;
     this.height = height;
     this.colors = colors.map(c => (typeof c === 'string' ? hexToRgb(c) : c));
+    this.colorsLab = this.colors.map(rgbToOklab);
     this.options = {
       gridSize: options.gridSize || this.calculateGridSize(colors.length),
       sharp: options.sharp ?? false,
@@ -45,6 +46,7 @@ export class MeshGradient {
       seed: options.seed ?? 0,
     };
 
+    this.positions = this.generatePositions();
     this.grid = this.createColorGrid();
   }
 
@@ -106,7 +108,7 @@ export class MeshGradient {
 
   createColorGrid() {
     const { cols, rows } = this.options.gridSize;
-    const positions = this.generatePositions();
+    const positions = this.positions;
     const grid = [];
 
     for (let row = 0; row < rows; row++) {
@@ -128,11 +130,14 @@ export class MeshGradient {
   }
 
   getColorAt(u, v) {
-    const { cols, rows } = this.options.gridSize;
-
     u = Math.max(0, Math.min(1, u));
     v = Math.max(0, Math.min(1, v));
 
+    if (this.options.positionType !== 'grid') {
+      return this.getPointColorAt(u, v);
+    }
+
+    const { cols, rows } = this.options.gridSize;
     const cellX = u * (cols - 1);
     const cellY = v * (rows - 1);
 
@@ -153,6 +158,47 @@ export class MeshGradient {
     const se = this.grid[row + 1]?.[col + 1]?.color || nw;
 
     return bilinearInterpolate(nw, ne, sw, se, localU, localV);
+  }
+
+  getPointColorAt(u, v) {
+    const minDim = Math.min(this.width, this.height);
+    const scaleX = this.width / minDim;
+    const scaleY = this.height / minDim;
+    const falloff = this.options.sharp ? 2 : 1;
+    const power = falloff / 2;
+    const epsilon = 1e-6;
+    let totalWeight = 0;
+    let L = 0;
+    let a = 0;
+    let b = 0;
+
+    for (let i = 0; i < this.positions.length; i++) {
+      const pos = this.positions[i];
+      const dx = (u - pos.x) * scaleX;
+      const dy = (v - pos.y) * scaleY;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq < epsilon) {
+        return this.colors[i];
+      }
+
+      const weight = 1 / Math.pow(distSq + epsilon, power);
+      const lab = this.colorsLab[i];
+      L += lab.L * weight;
+      a += lab.a * weight;
+      b += lab.b * weight;
+      totalWeight += weight;
+    }
+
+    if (totalWeight === 0) {
+      return this.colors[0];
+    }
+
+    return oklabToRgb({
+      L: L / totalWeight,
+      a: a / totalWeight,
+      b: b / totalWeight,
+    });
   }
 
   sharpen(t) {
