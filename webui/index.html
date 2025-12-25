@@ -653,11 +653,11 @@
       <div class="dimensions-compact">
         <div class="dim-input">
           <label>W</label>
-          <input type="number" id="width" value="1200" min="64" max="2048">
+          <input type="number" id="width" value="1024" min="64" max="2048">
         </div>
         <div class="dim-input">
           <label>H</label>
-          <input type="number" id="height" value="630" min="64" max="2048">
+          <input type="number" id="height" value="512" min="64" max="2048">
         </div>
       </div>
       <input type="hidden" id="seed" min="100" max="999">
@@ -1689,7 +1689,9 @@
       const positionType = positionTypeInput.value;
       const noise = noiseInput.value;
       const seed = seedInput.value;
-      return `warpgrad -W ${w} -H ${h} --colors '${colorsStr}' -w ${warp} -s ${warpSize} -t ${warpType} -p ${positionType} -n ${noise} --seed ${seed} -o output.jpg`;
+      const format = document.getElementById('download-format').value;
+      const ext = format === 'png' ? 'png' : 'jpg';
+      return `warpgrad -W ${w} -H ${h} --colors '${colorsStr}' -w ${warp} -s ${warpSize} -t ${warpType} -p ${positionType} -n ${noise} --seed ${seed} -o output.${ext}`;
     }
 
     let sortable = null;
@@ -1998,6 +2000,8 @@
       generatePositions();
       debouncedRender();
     });
+
+    document.getElementById('download-format').addEventListener('change', updateCode);
 
     document.getElementById('add-color').addEventListener('click', () => {
       const algorithm = document.getElementById('color-algorithm').value;
